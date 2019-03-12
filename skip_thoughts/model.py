@@ -10,7 +10,7 @@ from skip_thoughts.config import *
 
 
 class Encoder(nn.Module):
-    thought_size = 1200
+    thought_size = 2400
     word_size = 620
 
     @staticmethod
@@ -31,19 +31,21 @@ class Encoder(nn.Module):
 
     def forward(self, sentences):
         # sentences = (batch_size, maxlen), with padding on the right.
-
+#         print(sentences.shape)
         sentences = sentences.transpose(0, 1)  # (maxlen, batch_size)
 
         word_embeddings = F.tanh(self.word2embd(sentences))  # (maxlen, batch_size, word_size)
-
+#         print(word_embeddings.shape)
         # The following is a hack: We read embeddings in reverse. This is required to move padding to the left.
         # If reversing is not done then the RNN sees a lot a garbage values right before its final state.
         # This reversing also means that the words will be read in reverse. But this is not a big problem since
         # several sequence to sequence models for Machine Translation do similar hacks.
         rev = self.reverse_variable(word_embeddings)
-
+#         print(rev.shape)
         _, (thoughts, _) = self.lstm(rev)
+#         print(thoughts.shape)
         thoughts = thoughts[-1]  # (batch, thought_size)
+#         print(thoughts.shape)
 
         return thoughts, word_embeddings
 
@@ -68,25 +70,27 @@ class DuoDecoder(nn.Module):
         # Prepare Thought Vectors for Prev. and Next Decoders.
         prev_thoughts = thoughts[:, :-1, :]  # (maxlen, batch-1, thought_size)
         next_thoughts = thoughts[:, 1:, :]   # (maxlen, batch-1, thought_size)
-
+    
+#         print(prev_thoughts.shape)
         # Teacher Forcing.
         #   1.) Prepare Word embeddings for Prev and Next Decoders.
         prev_word_embeddings = word_embeddings[:, :-1, :]  # (maxlen, batch-1, word_size)
         next_word_embeddings = word_embeddings[:, 1:, :]  # (maxlen, batch-1, word_size)
+#         print(prev_word_embeddings.shape)
         #   2.) delay the embeddings by one timestep
         delayed_prev_word_embeddings = torch.cat([0 * prev_word_embeddings[-1:, :, :], prev_word_embeddings[:-1, :, :]])
         delayed_next_word_embeddings = torch.cat([0 * next_word_embeddings[-1:, :, :], next_word_embeddings[:-1, :, :]])
-
+#         print(delayed_prev_word_embeddings.shape)
         # Supply current "thought" and delayed word embeddings for teacher forcing.
         prev_pred_embds, _ = self.prev_lstm(torch.cat([next_thoughts, delayed_prev_word_embeddings], dim=2))  # (maxlen, batch-1, embd_size)
         next_pred_embds, _ = self.next_lstm(torch.cat([prev_thoughts, delayed_next_word_embeddings], dim=2))  # (maxlen, batch-1, embd_size)
-
+#         print(prev_pred_embds.shape)
         # predict actual words
         a, b, c = prev_pred_embds.size()
         prev_pred = self.worder(prev_pred_embds.view(a*b, c)).view(a, b, -1)  # (maxlen, batch-1, VOCAB_SIZE)
         a, b, c = next_pred_embds.size()
         next_pred = self.worder(next_pred_embds.view(a*b, c)).view(a, b, -1)  # (maxlen, batch-1, VOCAB_SIZE)
-
+#         print(prev_pred.shape)
         prev_pred = prev_pred.transpose(0, 1).contiguous()  # (batch-1, maxlen, VOCAB_SIZE)
         next_pred = next_pred.transpose(0, 1).contiguous()  # (batch-1, maxlen, VOCAB_SIZE)
 
@@ -133,9 +137,12 @@ class UniSkip(nn.Module):
         prev_loss = F.cross_entropy(masked_prev_pred.view(-1, VOCAB_SIZE), sentences[:-1, :].view(-1))
         next_loss = F.cross_entropy(masked_next_pred.view(-1, VOCAB_SIZE), sentences[1:, :].view(-1))
 
+#         print(masked_prev_pred.view(-1, VOCAB_SIZE).shape)
+#         print(sentences[:-1, :].view(-1).shape)
         loss = prev_loss + next_loss
         
         _, prev_pred_ids = prev_pred[0].max(1)
         _, next_pred_ids = next_pred[0].max(1)
 
+#         print(prev_pred[0].shape)
         return loss, sentences[0], sentences[1], prev_pred_ids, next_pred_ids

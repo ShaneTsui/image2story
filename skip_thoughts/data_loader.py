@@ -1,7 +1,4 @@
 import torch
-
-print(__name__)
-
 from torch.autograd import Variable
 from skip_thoughts.vocab import *
 from skip_thoughts.config import *
@@ -24,23 +21,24 @@ class DataLoader:
             with open(text_file, "rt") as f:
                 sentences = f.readlines()
             print("Making dictionary for these words")
+#             print(sentences[1])
             word_dict = build_and_save_dictionary(sentences, source=text_file)
-
+#             print(word_dict.items())
         assert sentences and word_dict, "Please provide the file to extract from or give sentences and word_dict"
 
         self.sentences = sentences
         self.word_dict = word_dict
         print("Making reverse dictionary")
         self.revmap = list(self.word_dict.items())
-
+#         print(self.revmap)
+#         for sen in self.sentences:
+#             print(sen)
         self.lengths = [len(sent) for sent in self.sentences]
-
+#         print(self.lengths)
     def convert_sentence_to_indices(self, sentence):
 
-        indices = [
-                      # assign an integer to each word, if the word is too rare assign unknown token
+        indices = [# assign an integer to each word, if the word is too rare assign unknown token
                       self.word_dict.get(w) if self.word_dict.get(w, VOCAB_SIZE + 1) < VOCAB_SIZE else self.UNK
-
                       for w in sentence.split()  # split into words on spaces
                   ][: self.maxlen - 1]  # take only maxlen-1 words per sentence at the most.
 
@@ -86,11 +84,12 @@ class DataLoader:
 
         for i in range(first_index, first_index + batch_size):
             sent = self.sentences[i]
+#             print(sent)
             ind = self.convert_sentence_to_indices(sent)
+#             print(ind)
             batch.append(ind)
             lengths.append(min(len(sent.split()), MAXLEN))
 
         batch = torch.stack(batch)
         lengths = np.array(lengths)
-
         return batch, lengths
