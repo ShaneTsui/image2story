@@ -76,9 +76,10 @@ class DataLoader:
 
         return " ".join(words)
 
-    def fetch_batch(self, batch_size):
+    def fetch_batch(self, batch_size, first_index=0):
 
-        first_index = random.randint(0, len(self.sentences) - batch_size)
+        first_index = (first_index * batch_size) % (len(self.sentences) - batch_size)
+#         first_index = random.randint(0, len(self.sentences) - batch_size)
         batch = []
         lengths = []
 
