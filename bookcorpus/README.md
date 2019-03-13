@@ -7,6 +7,14 @@ You can reproduce BookCorpus by yourself.
 This repository includes a crawler collecting data from [smashwords.com](https://www.smashwords.com/books/category/1/downloads/0/free/medium/0), which is the original source of BookCorpus.
 Collected sentences may partially differ but the number of them will be larger or almost the same.
 
+## How to post-process downloaded files
+1. Use txt_washer_multiprocess to replace / remove all unwanted characters. There are actually 2 types of txt file. One is directly 
+downloaded with txt format. The other is converted from epub format. Since the convertor process on the basis of each epub line and 
+always keep a '\n' at the end, each paragraph is broken up into pieces. Thus, the 2 types of txt files should be handled 
+in different ways.
+2. Use txt_concat_multiprocess.py to tokenize and concatenate all the txt files into a long txt file.
+3. Use make_dictionary.py to generate dictionary files.
+
 
 ## How to use
 
