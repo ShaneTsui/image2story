@@ -104,8 +104,8 @@ class TextSet(Dataset):
 
 class Onehot:
 
-    def __init__(self, file_dir=None, dictonary=None):
-        assert dile_dir or dictionary
+    def __init__(self, file_dir=None, dictionary=None):
+        assert file_dir or dictionary
         if file_dir:
             self.dict = []
 
@@ -150,8 +150,17 @@ class Onehot:
 
     def __call__(self, words, return_idx=False):
         onehots = torch.zeros([len(words), self.num], dtype=torch.float)
+        words = [self.filter(word) for word in words]
         idx = torch.LongTensor([self.dict.index(word) for word in words])
         if return_idx:
             return onehots.scatter_(1, idx.view(-1, 1), 1), idx
         return onehots.scatter_(1, idx.view(-1, 1), 1)
-        
+
+    def filter(self, word):
+        if word not in self.dict:
+            return 'UNK'
+        return word
+
+    def decode(self, onehot):
+        val, idx = onehot.max(2)
+        return self.dict(idx)

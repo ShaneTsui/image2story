@@ -4,15 +4,16 @@ import torch.nn as nn
 
 class Talker(nn.Module):
 
-    def __init__(self, dict_size, hidden_size):
+    def __init__(self, embed_size, hidden_size, dict_size):
         # input_size is the encodding dimension
         super(Talker, self).__init__()
         
-        self.input_size = dict_size
+        self.input_size = embed_size
         self.hidden_size =  hidden_size
-        self.output_size = dict_size
-        self.lstm = nn.LSTM(dict_size, hidden_size)
-        self.linear = nn.Linear(hidden_size, dict_size, bias=True)
+        self.output_size = embed_size
+        self.lstm = nn.GRU(embed_size, hidden_size)
+        self.linear = nn.Linear(hidden_size, embed_size, bias=True)
+        self.vec2word = nn.Linear(embed_size, dict_size, bias=True)
         self.softmax = nn.Softmax(dim=2)
 
 
@@ -22,6 +23,6 @@ class Talker(nn.Module):
 
     def forward(self, input):
         output, self.hidden = self.lstm(input, self.hidden)
-        print(self.linear(output).shape)
-        print(self.softmax(self.linear(output)).shape)
-        return self.softmax(self.linear(output))
+        vec = self.linear(output)
+        return vec, self.softmax(self.vec2word(vec))
+

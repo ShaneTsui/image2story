@@ -10,7 +10,7 @@ import yaml
 import os
 import time
 import pathlib
-import unicodedata
+import pickle
 
 from Talker import *
 from TextDataset import *
@@ -48,81 +48,121 @@ def main():
     # encoder.load_state_dict(torch.load(config['encoder_dir']))
 
     # build dataset and dataloader
-    print(5)
     dataset = TextSet(file_dir=config['dir'])
     dataloader = utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=4, pin_memory=True)
     
-    # load skipvector
-    print(1)
+    
     skip_dir = 'data/skip-thoughts'
     
     # load dictionary
-    print(2)
-    dictionary = []
-    with open(skip_dir+'/dictionary.txt', encoding="utf-8") as f:
-        for l in f:
-            dictionary.append(l)
+    print('Loading dictionary...')
+    with open(skip_dir+'/romance_clean.txt.pkl', 'rb') as f:
+        dictionary = pickle.load(f)
+    dictionary =list(dictionary.keys())[0:20000-2]
+    dictionary = ['EOS'] + dictionary + ['UNK']
+    print('Dictionary successfully loaded.\n'+'*'*50)
+    
+#     with open(skip_dir+'/dictionary_text.txt', 'wb') as f:
+#         for word in dictionary:
+#             w = word+'\n'
+#             f.write(w.encode("utf-8"))
+
+
+#     dictionary = []
+#     with open(skip_dir+'/dictionary.txt', encoding="utf-8") as f:
+#         for l in f:
+#             dictionary.append(l)
+            
+#     D = np.load(skip_dir+'/utable.npy')[0:20000]
     
     # read vocab
-    print(3)
-#     vocab = []
-    with open(config['dir'], encoding="utf-8") as g:
-        book = g.read()
-        book = unicodedata.normalize('NFC', book).encode('ascii','ignore')
-        vocab = book.split()
-#         book = g.readlines()
-#         for line in book:
-#             line = line.strip()
-#             for word in line.split():
-#                 if word not in vocab:
-#                     vocab.append(word)
-        if 'EOS' not in vocab:
-            vocab.append('EOS')
-    vocab = list(set(vocab))
+    print('Reading vocabulary in the corpus...')
+    if not config['vocab']:
+        with open(config['dir'], encoding="utf-8") as g:
+            book = g.read()
+            vocab = book.split()
+    #         book = g.readlines()
+    #         for line in book:
+    #             line = line.strip()
+    #             for word in line.split():
+    #                 if word not in vocab:
+    #                     vocab.append(word)
+            if 'EOS' not in vocab:
+                vocab.append('EOS')
+        vocab = list(set(vocab))
+        with open('vocab.pkl', 'wb') as f:
+            pickle.dump(vocab, f)
+    else:
+        with open('vocab.pkl', 'rb') as f:
+            vocab = pickle.load(f)
+    print('Vocabulary successfully read.\n'+'*'*50)
 #     vocab = [unicodedata.normalize('NFKD', v).encode('ascii','ignore') for v in vocab]
 #     vocab = [v.encode("utf-8") for v in list(set(vocab))]
 #     print(type(vocab[0]))
     
-    print(4)
+    # load skipvector
+    print('Loading skip-thoughts...')
     uniskip = UniSkip(skip_dir, vocab)
+    print('Skip-thoughts successfully loaded.\n'+'*'*50)
     
     # initialize
 #     onehot = Onehot(config['dir'])
-#     eos_hot = onehot(['EOS'])
 #     model = Talker(onehot.num, 2400)
-    print(6)
     onehot = Onehot(dictionary=dictionary)
-    model = Talker(len(dictionary), 2400)
+#     eos_embedding = -torch.ones((1, 620))
+    eos_hot = onehot(['EOS'])
+    model = Talker(620, 2400, len(dictionary))
     model.to(device)
-    criterion = nn.CrossEntropyLoss()
+#     criterion = nn.CrossEntropyLoss()
+    
+    criterion = nn.MSELoss()
+    criterion.to(device)
     optimizer = optim.Adam(model.parameters(), lr=config['lr'])
     
+    word_embedding = nn.Embedding(20000, 620)
+#     word_embedding.to(device)
 
+    Loss = []
+    
+    print('Start training...')
     for epoch in range(config['n_epoch']):
         for i, (sentence, story) in enumerate(dataloader):
 
             # formatting
             sentence, sentence_idx = onehot([w[0] for w in sentence], return_idx=True)
             story, story_idx = onehot([w[0] for w in story], return_idx=True)
-            story.to(device), story_idx.to(device)
-            encoding = uniskip(sentence_idx, lengths=[len(sentence_idx)])
-            model.init_hidden(encoding)
-            input = torch.cat((eos_hot, story[1:, :]), dim=0)
+            target_vec = word_embedding(story_idx)
+            in_vec = word_embedding(torch.cat((torch.LongTensor([0]), story_idx[1:]), dim=0))
+            in_vec = in_vec.unsqueeze(1)
             
-            # to device
-            sentence.to(device)
-            story_idx.to(device)
-            input.to(device)
+            encoding = uniskip(sentence_idx.view(1, -1), lengths=[len(sentence_idx)])
+            
+            # to device         
+            encoding = encoding.to(device)
+            sentence = sentence.to(device)
+            story = story.to(device)
+            target_vec = target_vec.to(device)
+            in_vec = in_vec.to(device)
 
             # backprop
+            model.init_hidden(encoding.view(1, 1, -1))
             optimizer.zero_grad()
-            output = model(input.unsqueeze(1))
-#             print('target shape', story.unsqueeze(1).shape)
-#             print('output shape', output.shape)
-            loss = criterion(output.squeeze(1), Variable(story_idx.long()))
-            # loss = criterion(output, story.unsqueeze(1))
+            out_vec, output = model(in_vec)
+#             print(target_vec.shape)
+#             print(output.shape)
+#             print(out_vec.shape)
+#             print(story.shape)
+#             loss = criterion(output, Variable(story.long()))
+            loss = criterion(out_vec, target_vec.view(-1, 1, 620))
+            
             loss.backward()
             optimizer.step()
+            
+            
+            Loss.append(loss.item())
+            
+            print(Loss[-1])
+            
             
             # save model
             model_name = "epoch_{}-batch_{}-{}.pt".format(epoch, i, time.strftime("%Y%m%d-%H%M%S"))
