@@ -1,9 +1,0 @@
-
-dir: './romance_clean.txt'
-encoder_dir: ''
-n_epoch: 1
-lr: 0.0001
-bs: 1
-
-vocab: True
-vocab_dir: './vocab.pkl'
