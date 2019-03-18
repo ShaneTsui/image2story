@@ -62,7 +62,7 @@ class Model(nn.Module):
         # input size: (batch_size, max_len)
         embed = self.embedding(input)
         # embed size: (batch_size, max_len, embed_size)
-        outvec, hidden = self.lstm(embed.view(-1, self.batch_size, self.embed_size), self.hidden)
+        outvec, self.hidden = self.lstm(embed.view(-1, self.batch_size, self.embed_size), self.hidden)
         output = self.softmax(self.linear(outvec.view(-1, self.hidden_size)))
         # output size: (max_len*batch_size, dict_size)
         return output, hidden

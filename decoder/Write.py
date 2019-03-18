@@ -65,16 +65,16 @@ def main():
     # check GPU
     assert torch.cuda.is_available(), 'CUDA is not available'
     device = torch.device('cuda')
-
-    onehot = Onehot(dictionary=dictionary)
+    
+    # load model
     model = Model(dict_size, 620, 2400, 1).to(device)
     model.load_state_dict(torch.load(config['model_path']))
-    model.to(device)
     model.eval()
 
-    sentence = ['I', 'love', 'my', 'teacher', 'and', 'his', 'dog', '.', 'EOS']
-    sentence_onehot, sentence_idx = onehot([w[0] for w in sentence], return_idx=True)
-    encoding = uniskip(sentence_idx.view(1, -1), lengths=[len(sentence_idx)]).to(device)
+    sentence = ['I', 'like', 'my', 'teacher', 'and', 'his', 'dog', '.', 'EOS']
+    sentence_idx = torch.tensor([dictionary.index(w) for w in sentence])
+    print(sentence_idx)
+    encoding = uniskip(sentence_idx.view(1, -1), lengths=[len(sentence_idx)]).view(1, 1, -1).to(device)
     
     n_word = 20
     neuralstory = []
@@ -85,7 +85,8 @@ def main():
     
     
     for k in range(n_word):
-        model.init_hidden(encoding.view(1, 1, -1))
+        print(encoding)
+        model.init_hidden(encoding)
 
         word_id = word_id.to(device)
         output, encoding = model(word_id)
@@ -93,23 +94,7 @@ def main():
         word = dictionary[word_id.item()]
         neuralstory.append(word) 
         
-#         if word == 'EOS':
-#             n_st = n_st + 1
-    
-    
 
-#     while n_st <= n_sentence:
-# #         print('input shape', c.shape)
-#         c = c.to(device)
-#         outvec, output = model(c.view(1, 1, 620))
-# #         print('output shape', outvec.shape)
-#         outvec = outvec.to('cpu')
-#         word = voice(outvec)
-#         print('word', word)
-#         neuralstory.append(word) 
-#         c = word_embedding(torch.LongTensor([dictionary.index(word)]))
-#         if word == 'EOS':
-#             n_st = n_st + 1
     with open('Neuralstory.txt', 'wb') as f:
         for sentence_word in sentence:
             f.write(sentence_word.encode('utf-8'))
