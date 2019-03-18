@@ -2,9 +2,12 @@
 Extract feature from original image using InceptionV3
 """
 
+from keras.applications.vgg19 import VGG19
 from keras.applications.inception_v3 import InceptionV3
 from keras.models import Model
 from keras import backend as K
+from keras.preprocessing import image as kimage
+
 
 import os
 import json
@@ -53,19 +56,37 @@ def extract_feature_caption(year, dataset_path='D:\Dataset\Coco', batch_size=128
     val_dataset = CocoDataset(val_path, val_imgs, val_id2imgname, batch_size=batch_size)
 
     # Build inception model
-    model = InceptionV3(weights='imagenet')
+    # model = InceptionV3(weights='imagenet')
+    model = VGG19(weights='imagenet')
     base_input = model.input
     hidden_layer = model.layers[-2].output
     hidden_model = Model(base_input, hidden_layer)
+    print(model.summary())
+    print(hidden_model.summary())
+    # print()
 
     # extract feature
     extract_feature(model=hidden_model, dataset=train_dataset, id2captions=train_id2captions, type='train', year=year)
     extract_feature(model=hidden_model, dataset=val_dataset, id2captions=val_id2captions, type='val', year=year)
 
+def extract_image_feature(image_path):
+    # Build inception model
+    # model = InceptionV3(weights='imagenet')
+    model = VGG19(weights='imagenet')
+    base_input = model.input
+    hidden_layer = model.layers[-2].output
+    hidden_model = Model(base_input, hidden_layer)
+
+    img = kimage.load_img(image_path, target_size=(224, 224))
+    img = kimage.img_to_array(img)
+    img = np.expand_dims(img, axis=0)
+    features = hidden_model.predict(img)
+    with open(f"{image_path}_feat.npy".replace(".jpg", ""), 'wb') as f:
+        np.save(f, features)
 
 if __name__ == '__main__':
     print("gpu: ", K.tensorflow_backend._get_available_gpus())
-    for year in [2014, 2017]:
-        features = extract_feature_caption(year)
-
+    extract_image_feature('../data/coco/gary_crop.jpg')
+    # for year in [2014, 2017]:
+    #     features = extract_feature_caption(year)
 

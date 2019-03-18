@@ -5,8 +5,9 @@ from keras.preprocessing import image
 
 class CocoDataset:
 
-    def __init__(self, image_dir, image_ids, id2imgname, batch_size=128):
+    def __init__(self, image_dir, image_ids, id2imgname, batch_size=128,image_shape=(224,224)):
         self.image_dir = image_dir
+        self.image_shape = image_shape
         self.id2imgname = id2imgname
         self.image_ids = image_ids
         self.cur = 0
@@ -18,7 +19,7 @@ class CocoDataset:
 
     def _get_image(self, image_path):
         try:
-            img = image.load_img(image_path, target_size=(299, 299))
+            img = image.load_img(image_path, target_size=self.image_shape)
             x = image.img_to_array(img)
             # x = np.expand_dims(x, axis=0)
             # x = self._preprocess_input(x)
