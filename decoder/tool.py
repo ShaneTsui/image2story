@@ -31,3 +31,14 @@ class Voice:
         dict_vec = self.embedding(torch.LongTensor([range(self.dict_size)]))
         self.dict_vec = dict_vec.squeeze(0)
 
+def story_collate(batch):
+    return batch
+        
+def pad(batch, val):
+    # batch: a list of tensor
+    story_len = [len(story) for story in batch]
+    max_len = max(story_len)
+    story_pad = lambda story, l: torch.cat((torch.LongTensor(story), val*torch.ones(max_len-l).long()))
+    story = [story_pad(story, l) for story, l in zip(batch, story_len)]
+    # output size: (batch_size, max_len)
+    return torch.stack(story), story_len

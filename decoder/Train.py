@@ -13,7 +13,8 @@ import pathlib
 import pickle
 
 from Talker import *
-from TextDataset import *
+from Dataset import *
+from Tool import *
 sys.path.append('skip-thoughts.torch/pytorch')
 from skipthoughts import UniSkip
 from itertools import islice
@@ -42,11 +43,6 @@ def main():
     # check GPU
     assert torch.cuda.is_available(), 'CUDA is not available'
     device = torch.device('cuda')
-
-    # build dataset and dataloader
-    dataset = TextSet(file_dir=config['dir'])
-    dataloader = utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=4, pin_memory=True)
-    
     
     skip_dir = 'data/skip-thoughts'
     
@@ -56,7 +52,16 @@ def main():
         dictionary = pickle.load(f)
     dictionary =list(dictionary.keys())[0:20000-2]
     dictionary = ['EOS'] + dictionary + ['UNK']
+    dict_size = len(dictionary)
     print('Dictionary successfully loaded.\n'+'*'*50)
+
+    # build dataset and dataloader
+    print('Building dataloader...')
+    bs = config['batch_size']
+    dataset = TextSet(file_dir=config['dir'], dictionary=dictionary)
+    print('Total: {}'.format(len(dataset)))
+    dataloader = utils.data.DataLoader(dataset, batch_size=bs, shuffle=True, collate_fn=story_collate, num_workers=16, pin_memory=True)
+    print('Dataloader successfully built.\n'+'*'*50)
     
     # read vocab
     print('Reading vocabulary in the corpus...')
@@ -77,68 +82,60 @@ def main():
     # load skipvector
     print('Loading skip-thoughts...')
     with torch.no_grad():
-        uniskip = UniSkip(skip_dir, vocab)
+        uniskip = UniSkip(skip_dir, vocab).to(device)
     print('Skip-thoughts successfully loaded.\n'+'*'*50)
     
     # initialize
+    print('Initializing...')
     onehot = Onehot(dictionary=dictionary)
 
-    model = Model(len(dictionary), 620, 2400)
-    model.to(device)
+    model = Model(dict_size, 620, 2400, bs).to(device)
     
-    weight = [1/(1+np.exp((10000-x)/5000)) for x in range(20000)]
-    criterion = nn.NLLLoss(weight=torch.tensor(weight), ignore_index=19999)
-    criterion.to(device)
+    weight = torch.tensor([5]+[1/(1+np.exp((x-dict_size)/(dict_size/5))) for x in range(dict_size-1)], device=device)
+    criterion = nn.NLLLoss(weight=weight, ignore_index=dict_size-1)
 
     optimizer = optim.Adam(model.parameters(), lr=config['lr'])
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=20)
-
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=config['patience'])
+    
     Loss = []
+    print('Initialization succeed.\n'+'*'*50)
     
     print('Start training...')
+    model.train()
     for epoch in range(config['n_epoch']):
-        for i, (sentence, story) in enumerate(dataloader):
+        for i, story in enumerate(dataloader):
 
             # formatting
-#             sentence_idx = word2idx(sentence, dictionary)
-#             story_idx = word2idx(story, dictionary)
-            sentence, sentence_idx = onehot([w[0] for w in sentence], return_idx=True)
-            story, story_idx = onehot([w[0] for w in story], return_idx=True)
-            encoding = uniskip(sentence_idx.view(1, -1), lengths=[len(sentence_idx)])
-            input = torch.cat((torch.LongTensor([0]), story_idx[0:-1]), dim=0)
-#             print(sentence_idx)
-#             print(input)
-
-            # to device
-            # sentence = sentence.to(device)
-            # story = story.to(device)
-            input = input.to(device)
-            story_idx = story_idx.to(device)
-            encoding = encoding.to(device)
+            story, story_len = pad(story, dict_size-1)
+            story = story.to(device)
+            encoding = uniskip(story.view(bs, -1), lengths=story_len).to(device) # input size: (batch_size, 2400)
+            input = torch.cat((torch.zeros((bs, 1), device=device).long(), story[:, :-1]), dim=1)
+            input = input.transpose(0, 1).unsqueeze(2).to(device)
 
             # backprop
             model.zero_grad()
-            model.init_hidden(encoding.view(1, 1, -1))           
-            output = model(input)
-            loss = criterion(output, story_idx)
-            
+            model.init_hidden(encoding.unsqueeze(0))           
+            output, _ = model(input)
+            loss = criterion(output, story.view(-1))
+           
             loss.backward()
-            optimizer.step()           
+            optimizer.step()
             
             Loss.append(loss.item())
             
             scheduler.step(loss)
             
-            print(Loss[-1])
+            if not i % 100:
+                print(Loss[-1])
             
             
             # save model
-            if not i % 50:
+            if not i % 10000:
                 model_name = "epoch_{}-batch_{}-{}.pt".format(epoch, i, time.strftime("%Y%m%d-%H%M%S"))
                 torch.save(model.state_dict(), os.path.join(model_path, model_name))
 #                 print(output)
                 
-            if not i % 1000:
+            if not i % 10000:
                 with open(result_path+'/loss_{}.pkl'.format(i), 'wb') as f:
                     pickle.dump(loss, f)
 

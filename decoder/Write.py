@@ -14,7 +14,7 @@ import pickle
 
 from Talker import *
 from TextDataset import *
-from tool import *
+from Tool import *
 sys.path.append('skip-thoughts.torch/pytorch')
 from skipthoughts import UniSkip
 from itertools import islice
@@ -33,6 +33,7 @@ def main():
         dictionary = pickle.load(f)
     dictionary =list(dictionary.keys())[0:20000-2]
     dictionary = ['EOS'] + dictionary + ['UNK']
+    dict_size = len(dictionary)
     print('Dictionary successfully loaded.\n'+'*'*50)
     
     with open('fuck.txt', 'wb') as f:
@@ -66,32 +67,28 @@ def main():
     device = torch.device('cuda')
 
     onehot = Onehot(dictionary=dictionary)
-    model = Model(len(dictionary), 620, 2400)
+    model = Model(dict_size, 620, 2400, 1).to(device)
     model.load_state_dict(torch.load(config['model_path']))
     model.to(device)
     model.eval()
 
     sentence = ['I', 'love', 'my', 'teacher', 'and', 'his', 'dog', '.', 'EOS']
     sentence_onehot, sentence_idx = onehot([w[0] for w in sentence], return_idx=True)
-    encoding = uniskip(sentence_idx.view(1, -1), lengths=[len(sentence_idx)])
-    model.init_hidden(encoding)
+    encoding = uniskip(sentence_idx.view(1, -1), lengths=[len(sentence_idx)]).to(device)
     
-#     n_sentence = 2
     n_word = 20
     neuralstory = []
     n_st = 0
 
-    # to device
-    encoding = encoding.to(device)
-
-    model.init_hidden(encoding.view(1, 1, -1))
-
-    word_id = torch.LongTensor([0])
+    
+    word_id = torch.LongTensor([5])
     
     
     for k in range(n_word):
+        model.init_hidden(encoding.view(1, 1, -1))
+
         word_id = word_id.to(device)
-        output = model(word_id)
+        output, encoding = model(word_id)
         word_id = torch.argmax(output)
         word = dictionary[word_id.item()]
         neuralstory.append(word) 
