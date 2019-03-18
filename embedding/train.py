@@ -169,11 +169,12 @@ def trainer(data='coco',
                 (r1i, r5i, r10i, medri) = t2i(lim, ls)
                 print("Text to image: %.1f, %.1f, %.1f, %.1f" % (r1i, r5i, r10i, medri))
 
-                print("Cal Recall@K using %ss" %(time.time()-r_time))
+                # print("Cal Recall@K using %ss" %(time.time()-r_time))
 
                 curr_step = uidx / validFreq
-
                 currscore = r1 + r5 + r10 + r1i + r5i + r10i
+
+                print(f"cur score = {currscore}")
                 if currscore > curr:
                     curr = currscore
                     best_r1, best_r5, best_r10, best_medr = r1, r5, r10, medr
@@ -181,7 +182,7 @@ def trainer(data='coco',
                     best_step = curr_step
 
                     # Save model
-                    print('Saving model...',)
+                    print(f'Saving model with score {currscore}',)
                     pkl.dump(model_options, open('%sparams_%s_batch-%s_score-%f.pkl'%(saved_model_path, encoder, uidx, currscore), 'wb'))
                     torch.save({
                         'model_state_dict': img_sen_model.state_dict(),
