@@ -78,24 +78,30 @@ def main():
     
     n_word = 20
     neuralstory = []
-    n_st = 0
+    n_st = 5
 
     
-    word_id = torch.LongTensor([5])
+    word_id = torch.LongTensor([0])
     
-    
-    for k in range(n_word):
+    k = 0
+    while k < n_st:
         print(encoding)
         model.init_hidden(encoding)
 
         word_id = word_id.to(device)
         output, encoding = model(word_id)
+        print(output[0:6])
         word_id = torch.argmax(output)
+        print(word_id.item())
         word = dictionary[word_id.item()]
-        neuralstory.append(word) 
+        neuralstory.append(word+' ') 
+        
+        if word_id == 0:
+            k = k + 1
         
 
     with open('Neuralstory.txt', 'wb') as f:
+        sentence = [word+' ' for word in sentence]
         for sentence_word in sentence:
             f.write(sentence_word.encode('utf-8'))
         f.write('\n'.encode('utf-8'))
