@@ -5,48 +5,54 @@ from itertools import islice
 from bisect import bisect_left
 from re import findall
 
+import pickle as pkl
+import decoder.config as config
     
 class TextSet(Dataset):
 
-    def __init__(self, file_dir, dictionary):
+    def __init__(self, file_dir, dictionary, n_words):
         # dictionary is a list
         self.dir = file_dir
         self.thr = 5
         self.dictionary = dictionary
-        self.init_len()
+        self.n_words = n_words
+        self.init()
 
     def __len__(self):
         return len(self.book)
             
     def __getitem__(self, idx):
         
-        text = findall('.*?[.!\?-]', self.book[idx])
-#         print(text[0])
+        # text = findall('.*?[.!\?-]', self.book[idx])
+        # print(text[0])
         
-        story = []
-        for sent in text:
-#             print(0)
-            story = story + sent.split() + ['EOS']
-        if len(story) == 0:
-            self[idx+1]
+        # story = []
+        # for sent in self.book[idx]:
+        #     story = story + sent.split() + ['<eos>']
+        # if len(story) == 0:
+        #     story = self[idx+1]
         
         # list of words
-        return self.encode(story).tolist()
+        return self.encode(self.book[idx].split() + ['<eos>'])
 
-    def init_len(self):
-        with open(self.dir, encoding="utf-8") as f:
-            self.book = f.readlines()
-        self.book = [l.strip('\n') for l in self.book if 2<len(l.split())<=50]
+    def init(self):
+        # with open(self.dir, encoding="utf-8") as f:
+        #     self.book = f.readlines()
+        # self.book = [l.strip('\n') for l in self.book if 30<len(l.split())<=80]
+        with open(config.paths['text'], 'rb') as f:
+            print('loading text')
+            text = pkl.load(f)
+        self.book = text
         
 
     def encode(self, text):
         encoding = []
         for word in text:
-            if word in self.dictionary:
-                encoding.append(self.dictionary.index(word))
+            if word in self.dictionary and self.dictionary[word] <= self.n_words:
+                encoding.append(self.dictionary[word])
             else:
-                encoding.append(self.dictionary.index('UNK'))
-        return torch.tensor(encoding)
+                encoding.append(self.dictionary['UNK'])
+        return encoding
 
 
 class Onehot:
